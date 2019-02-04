@@ -18,9 +18,12 @@ namespace Client
         private enum Horse { none = 0, BLACK, WHITE };
         private Horse[,] board = new Horse[edgeCount, edgeCount];
         private Horse nowPlayer = Horse.BLACK;
+        private Horse aiPlayer, userPlayer;
 
+        private int targetX, targetY;
+        private int limit = 1;
         private bool playing = false;
-
+        
         private bool judge() // 승리 판정 함수
         {
             for (int i = 0; i < edgeCount - 4; i++) // 가로
@@ -48,10 +51,19 @@ namespace Client
 
         private void refresh()
         {
+            // 전체 Board 정보를 초기화합니다.
             for (int i = 0; i < edgeCount; i++)
                 for (int j = 0; j < edgeCount; j++)
                     board[i, j] = Horse.none;
             this.boardPicture.Refresh();
+            // AI와 사용자 중에서 먼저 공격할 사람을 구합니다.
+            int rand = new Random().Next(1, 3);
+            if(rand == 1) aiPlayer = Horse.BLACK;
+            else aiPlayer = Horse.WHITE;
+            userPlayer = ((aiPlayer == Horse.BLACK) ? Horse.WHITE : Horse.BLACK);
+            nowPlayer = Horse.BLACK;
+            if (nowPlayer == userPlayer) status.Text = "당신의 차례입니다.";
+            else status.Text = "게임이 시작되었습니다.";
         }
 
         private void playButton_Click(object sender, EventArgs e)
@@ -61,32 +73,14 @@ namespace Client
                 refresh();
                 playing = true;
                 playButton.Text = "재시작";
-                status.Text = nowPlayer.ToString() + " 플레이어의 차례입니다.";
-                nowPlayer = Horse.BLACK;
             }
             else
             {
                 refresh();
-                status.Text = "게임이 재시작되었습니다.";
-                nowPlayer = Horse.BLACK;
             }
-            if (nowPlayer == Horse.BLACK)
+            if(nowPlayer == aiPlayer)
             {
-                AlphaBetaPruning(0, -1000000, 1000000);
-                int x = targetX;
-                int y = targetY;
-                board[x, y] = Horse.BLACK;
-                SolidBrush brush = new SolidBrush(Color.Black);
-                Graphics g = this.boardPicture.CreateGraphics();
-                g.FillEllipse(brush, x * rectSize, y * rectSize, rectSize, rectSize);
-                if (judge())
-                {
-                    status.Text = nowPlayer.ToString() + "플레이어가 승리했습니다.";
-                    playing = false;
-                    playButton.Text = "게임시작";
-                }
-                nowPlayer = ((nowPlayer == Horse.BLACK) ? Horse.WHITE : Horse.BLACK);
-                status.Text = nowPlayer.ToString() + " 플레이어의 차례입니다.";
+                ai_Attack();
             }
         }
 
@@ -111,27 +105,39 @@ namespace Client
                 gp.DrawLine(p, rectSize / 2, i, rectSize * edgeCount - rectSize / 2, i);
                 gp.DrawLine(p, i, rectSize / 2, i, rectSize * edgeCount - rectSize / 2);
             }
-            for(int i = 0; i < edgeCount; i++)
+        }
+
+        private void ai_Attack()
+        {
+            AlphaBetaPruning(0, -1000000, 1000000);
+            board[targetX, targetY] = aiPlayer;
+            Graphics g = this.boardPicture.CreateGraphics();
+            if (nowPlayer == Horse.BLACK)
             {
-                for(int j = 0; j < edgeCount; j++)
-                {
-                    if(board[i, j] == Horse.BLACK)
-                    {
-                        SolidBrush brush = new SolidBrush(Color.Black);
-                        gp.FillEllipse(brush, i * rectSize, j * rectSize, rectSize, rectSize);
-                    }
-                    else if (board[i, j] == Horse.WHITE)
-                    {
-                        SolidBrush brush = new SolidBrush(Color.White);
-                        gp.FillEllipse(brush, i * rectSize, j * rectSize, rectSize, rectSize);
-                    }
-                }
+                SolidBrush brush = new SolidBrush(Color.Black);
+                g.FillEllipse(brush, targetX * rectSize, targetY * rectSize, rectSize, rectSize);
+            }
+            else
+            {
+                SolidBrush brush = new SolidBrush(Color.White);
+                g.FillEllipse(brush, targetX * rectSize, targetY * rectSize, rectSize, rectSize);
+            }
+            if (judge())
+            {
+                if (nowPlayer == aiPlayer) status.Text = "AI 플레이어의 승리입니다.";
+                else status.Text = "당신의 승리입니다.";
+                playing = false;
+                playButton.Text = "게임시작";
+            }
+            else
+            {
+                nowPlayer = ((nowPlayer == Horse.BLACK) ? Horse.WHITE : Horse.BLACK);
             }
         }
 
         private void boardPicture_MouseDown(object sender, MouseEventArgs e)
         {
-            if (nowPlayer == Horse.BLACK) return;
+            if (nowPlayer == aiPlayer) return;
             if (!playing)
             {
                 MessageBox.Show("게임을 실행해주세요.");
@@ -159,50 +165,18 @@ namespace Client
             }
             if (judge())
             {
-                status.Text = nowPlayer.ToString() + "플레이어가 승리했습니다.";
+                if (nowPlayer == aiPlayer) status.Text = "AI 플레이어의 승리입니다.";
+                else status.Text = "당신의 승리입니다.";
                 playing = false;
                 playButton.Text = "게임시작";
             }
             else
             {
                 nowPlayer = ((nowPlayer == Horse.BLACK) ? Horse.WHITE : Horse.BLACK);
-                status.Text = nowPlayer.ToString() + " 플레이어의 차례입니다.";
-            }
-            if (nowPlayer == Horse.BLACK)
-            {
-                AlphaBetaPruning(0, -1000000, 1000000);
-                x = targetX;
-                y = targetY;
-                board[x, y] = Horse.BLACK;
-                SolidBrush brush = new SolidBrush(Color.Black);
-                g.FillEllipse(brush, x * rectSize, y * rectSize, rectSize, rectSize);
-                if (judge())
-                {
-                    status.Text = nowPlayer.ToString() + "플레이어가 승리했습니다.";
-                    playing = false;
-                    playButton.Text = "게임시작";
-                }
-                nowPlayer = ((nowPlayer == Horse.BLACK) ? Horse.WHITE : Horse.BLACK);
+                ai_Attack();
             }
         }
-
-        /*------------- 승리 판정 부분 -------------*/
-
-        // 플레이어 승리 판정
-        public bool win(int x, int y)
-        {
-            // 5목 이상을 만든 어떠한 경우라도 존재한다면
-            if (make5mok1(x, y) || make5mok2(x, y) || make5mok3(x, y) || make5mok4(x, y) || make5mok5(x, y) ||
-                    make5mok6(x, y) || make5mok7(x, y) || make5mok8(x, y) || make5mok9(x, y) || make5mok10(x, y) ||
-                    make5mok11(x, y) || make5mok12(x, y) || make5mok13(x, y) || make5mok14(x, y) || make5mok15(x, y) ||
-                    make5mok16(x, y) || make5mok17(x, y) || make5mok18(x, y) || make5mok19(x, y) || make5mok20(x, y))
-            {
-                // Winner = player;
-                return true;
-            }
-            return false;
-        }
-
+        
         /*------------- 5목이 만들어질 수 있는 모든 20가지 경우의 수  -------------*/
 
         public bool make5mok1(int x, int y)
@@ -1398,8 +1372,8 @@ namespace Client
             }
 
             // 가중치를 계산한 합을 sum에 더하여 반환
-            sum += open4 * 20000;
-            sum += half4 * 5000;
+            sum += open4 * 200000;
+            sum += half4 * 15000;
             sum += close4 * 1500;
             sum += open3 * 4000;
             sum += half3 * 1500;
@@ -1410,17 +1384,14 @@ namespace Client
             return sum;
         }
 
-        int targetX, targetY;
-        int limit = 1;
-
         // AlphaBetaPruning 알고리즘 함수
         int AlphaBetaPruning(int level, int alpha, int beta)
         {
             // 만약에 현재 최대 깊이인 limit에 도달한 경우
             if (level == limit)
             {
-                // 컴퓨터의 평가 가치에서 플레이어의 평가 가치를 뺀 수를 반환
-                return evaluate(Horse.WHITE) - evaluate(Horse.BLACK);
+                // 플레이어의 평가 가치에서 AI의 평가 가치를 뺀 수를 반환 (플레이어의 수 가치를 약간 더 높게 보기)
+                return evaluate(aiPlayer) - evaluate(userPlayer);
             }
             // MAX 부분에 해당하는 경우
             if (level % 2 == 0)
@@ -1438,7 +1409,7 @@ namespace Client
                         if (board[i, j] == 0)
                         {
                             // 잠시 그 수를 둔 것으로 설정
-                            board[i, j] = Horse.WHITE;
+                            board[i, j] = aiPlayer;
                             // 재귀적 호출
                             int e = AlphaBetaPruning(level + 1, alpha, beta);
                             // 다시 그 수를 두지 않은 것으로 설정
@@ -1484,7 +1455,7 @@ namespace Client
                         if (board[i, j] == 0)
                         {
                             // 잠시 그 수를 둔 것으로 설정
-                            board[i, j] = Horse.BLACK;
+                            board[i, j] = userPlayer;
                             // 재귀적 호출
                             int e = AlphaBetaPruning(level + 1, alpha, beta);
                             // 다시 그 수를 두지 않은 것으로 설정
